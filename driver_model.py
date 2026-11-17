@@ -16,6 +16,10 @@
 import matplotlib.pyplot as plt
 import numpy
 from itertools import product
+import matplotlib.pyplot as plt
+import numpy
+from itertools import product
+import math
 
 
 ###
@@ -155,13 +159,130 @@ def vehicleUpdateNotSteering():
     return returnValue   ### in m/s
     
 
-### Function to run a trial. Needs to be defined by students (section 2 and 3 of assignment)
+###
+### Section 2: e-mailing while driving
+###
+## Overview for readers:
+##  - drift():     the driver is typing, so the car is NOT steered and drifts randomly (red points)
+##  - steer():     the driver looks at the road and steers back towards lane centre (blue points)
+##  - runTrial():  simulates one e-mail (nrSentences x nrWordsPerSentence) for one interleaving strategy
+##  - plotTrial(): plots lane position over time for one trial
+## Units: time in ms, lane position in m, velocities in m/s.
+## Every 50 ms (timeStepPerDriftUpdate) one lane position is stored in locPos, plus its colour in locColor.
 
-def runTrial(nrWordsPerSentence =5,nrSentences=3,nrSteeringMovementsWhenSteering=2, interleaving="word"): 
-    print("hello world")
 
-print(example2("all"))
-print(example2("extremes"))
+## Drift while NOT steering (e.g. while typing).
+## For `duration` ms, update the position every 50 ms with a random lateral velocity.
+## Velocity is in m/s, so multiply by (dt / 1000) to get the distance moved in one 50 ms step.
+def drift(pos, duration, locPos, locColor):
+    """Car drifts (no steering) for `duration` ms, one update per 50 ms."""
+    dt = timeStepPerDriftUpdate
+    for i in range(math.floor(duration / dt)):          ## rounded down to whole 50 ms steps
+        pos = pos + vehicleUpdateNotSteering() * (dt / 1000)
+        locPos.append(pos)
+        locColor.append("red")                          ## red = no active steering
+    return pos
+
+
+## Active steering (driver attention on the road).
+## Each steering movement takes 250 ms (steeringUpdateTime). The lateral velocity is computed ONCE
+## per movement, based on the current distance from lane centre, and then applied in 5 steps of 50 ms.
+## vehicleUpdateActiveSteering() assumes a positive lane deviation, so we pass abs(pos) and decide
+## the direction ourselves: right of centre (pos > 0) -> move left, left of centre -> move right.
+## NB: the formula is negative below ~0.25 m, so close to centre the car is pushed slightly outwards;
+## the model therefore settles around ~0.25 m instead of exactly 0. This is a property of the model.
+def steer(pos, nrMovements, locPos, locColor):
+    """Active steering: nrMovements x 250 ms, position stored every 50 ms.
+    Returns the new position and the time spent steering."""
+    dt = timeStepPerDriftUpdate
+    for k in range(nrMovements):
+        latVel = vehicleUpdateActiveSteering(abs(pos))   # once per 250 ms
+        for i in range(math.floor(steeringUpdateTime / dt)):   ## 250 / 50 = 5 position updates
+            if pos > 0:
+                pos = pos - latVel * (dt / 1000)
+            else:
+                pos = pos + latVel * (dt / 1000)
+            locPos.append(pos)
+            locColor.append("blue")                     ## blue = active steering
+    return pos, nrMovements * steeringUpdateTime        ## also return the time spent steering (ms)
+
+
+## Simulate one trial (= typing one e-mail while driving).
+## Parameters:
+##   nrWordsPerSentence, nrSentences:  size of the e-mail
+##   nrSteeringMovementsWhenSteering:  how many 250 ms steering movements per driving break
+##   interleaving:                     strategy: "word" (steer after every word) or "sentence" (after every sentence)
+## Returns: total trial time (ms), list of lane positions (m), list of colours per position.
+def runTrial(nrWordsPerSentence=5, nrSentences=3, nrSteeringMovementsWhenSteering=2, interleaving="word"):
+    ## Step 1-2: reset the global parameters and create the storage variables
+    resetParameters()
+    locPos = []        ## all lane positions of this trial (one per 50 ms)
+    locColor = []      ## colour per position: "red" = drifting, "blue" = steering
+    trialTime = 0      ## running total of the trial time in ms
+    ## Step 4: the car starts slightly away from lane centre (0.27 m)
+    pos = startingPositionInLane
+
+    ## Step 6: typing speed for THIS trial, sampled once from a normal distribution (Jiang et al., 2020).
+    # typing speed: drawn once per trial, shared by all strategies
+    wpm = numpy.random.normal(wordsPerMinuteMean, wordsPerMinuteSD)
+    wpm = max(wpm, 1)                  ## guard: a draw <= 0 would give an impossible time per word
+    timePerWord = 60000 / wpm          ## words per minute -> ms per word (1 minute = 60000 ms)
+
+    ## Strategy "word": type one word, then steer, then the next word, etc.
+    if interleaving == "word":
+        ## Step 7: loop over sentences, and within each sentence over words
+        for s in range(nrSentences):
+            for w in range(nrWordsPerSentence):
+                ## Step 8: time for this word = typing + retrieving the word ("where was I?")
+                wordTime = timePerWord + retrievalTimeWord
+                if w == 0:                                    ## first word of a sentence: also retrieve the sentence
+                    wordTime += retrievalTimeSentence
+                trialTime += wordTime
+                ## Step 9: while typing the car drifts
+                pos = drift(pos, wordTime, locPos, locColor)
+
+                ## Step 10: steer after every word, except after the very last word of the e-mail
+                lastWord = (s == nrSentences - 1) and (w == nrWordsPerSentence - 1)
+                if not lastWord:
+                    pos, steerTime = steer(pos, nrSteeringMovementsWhenSteering, locPos, locColor)
+                    trialTime += steerTime
+
+    ## Strategy "sentence": type a whole sentence, then steer.
+    elif interleaving == "sentence":
+        for s in range(nrSentences):
+            # whole sentence in one go: sentence retrieval + all words, no per-word retrieval
+            sentenceTime = retrievalTimeSentence + nrWordsPerSentence * timePerWord
+            trialTime += sentenceTime
+            pos = drift(pos, sentenceTime, locPos, locColor)  ## car drifts during the whole sentence
+
+            if s < nrSentences - 1:          # no steering after the last sentence
+                pos, steerTime = steer(pos, nrSteeringMovementsWhenSteering, locPos, locColor)
+                trialTime += steerTime
+
+    return trialTime, locPos, locColor
+
+
+## Step 13: scatter plot of lane position over time for one trial.
+## x-axis: each stored position is one 50 ms step, so step i is at i * 50 ms.
+def plotTrial(trialTime, locPos, locColor):
+    times = [i * timeStepPerDriftUpdate for i in range(len(locPos))]
+
+    meanPos = numpy.mean(numpy.abs(locPos))   ## average distance from lane centre (absolute, so left/right don't cancel)
+    maxPos = numpy.max(numpy.abs(locPos))     ## furthest from lane centre, regardless of side
+
+    plt.scatter(times, locPos, c=locColor, s=8)   ## each point gets its own colour from locColor
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Lane position (m)")
+    plt.title(f"Total trial time = {trialTime:.0f} ms; "
+              f"Mean position on the road = {meanPos:.3f} m; "
+              f"Max position on the road (absolute) = {maxPos:.3f} m", fontsize=8)
+    plt.show()
+
+## Change the strategy here: "word" or "sentence".
+if __name__ == "__main__":
+    trialTime, locPos, locColor = runTrial(interleaving="sentence")
+    plotTrial(trialTime, locPos, locColor)
+
 
 ### function to run multiple simulations. Needs to be defined by students (section 3 of assignment)
 def runSimulations(nrSims = 100):

@@ -4,7 +4,7 @@ from itertools import product
 import math
 
 ###
-### Section 1a: Model Human Processor (Card, Moran & Newell, 1983) - simple reaction task
+### Section 1a: Basic concepts
 ###
 
 ## Step A: stimulus appears at t = 0, nothing has happened yet
