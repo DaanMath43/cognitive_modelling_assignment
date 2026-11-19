@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import numpy
 from itertools import product
 import math
+import random
+
 
 
 ###
@@ -273,10 +275,12 @@ def runTrial(nrWordsPerSentence=5, nrSentences=3, nrSteeringMovementsWhenSteerin
     elif interleaving == "none":
         emailTime = (retrievalTimeSentence + nrWordsPerSentence * timePerWord) * nrSentences
 
-        pos = drift(pos, sentenceTime, locPos, locColor)  ## car drifts during the whole sentence
+        pos = drift(pos, emailTime, locPos, locColor)  ## car drifts during the whole sentence
         trialTime += emailTime
 
-    return trialTime, locPos, locColor
+    meanPos = numpy.mean(numpy.abs(locPos))   ## average distance from lane centre (absolute, so left/right don't cancel)
+    maxPos = numpy.max(numpy.abs(locPos))     ## furthest from lane centre, regardless of side
+    return trialTime,meanPos,maxPos
 
 
 ## Step 13: scatter plot of lane position over time for one trial.
@@ -295,14 +299,57 @@ def plotTrial(trialTime, locPos, locColor):
               f"Max position on the road (absolute) = {maxPos:.3f} m", fontsize=8)
     plt.show()
 
-## Change the strategy here: "word" or "sentence".
-if __name__ == "__main__":
-    trialTime, locPos, locColor = runTrial(interleaving="sentence")
-    plotTrial(trialTime, locPos, locColor)
-
-
 ### function to run multiple simulations. Needs to be defined by students (section 3 of assignment)
 def runSimulations(nrSims = 100):
-    print("hello world")
+    totalTime = []
+    meanDeviation = []
+    maxDeviation = []
+    Condition = []
+    amountOfWords=[15,16,17,18,19,20]
+
+    for strategies in ["none","drivingOnly","sentence","word"]:
+        print(strategies)
+        for round in range(nrSims):
+            wordsInSentence= (random.choice(amountOfWords))
+            trialTime, meanPos, maxPos = runTrial(wordsInSentence, 10, 4, strategies)
+            totalTime.append(trialTime)
+            meanDeviation.append(meanPos)
+            maxDeviation.append(maxPos)
+            Condition.append(strategies)
+
+    ## Plot: max deviation (y) against total trial time (x)
+    ## one symbol per strategy; individual trials in grey, the mean per strategy in colour with SD error bars
+    markers = {"none": "o", "drivingOnly": "^", "sentence": "s", "word": "x"}
+    colors = {"none": "red", "drivingOnly": "blue", "sentence": "green", "word": "black"}
+
+    for strategy in markers:
+        ## collect the trials that belong to this strategy
+        times = []
+        devs = []
+        for i in range(len(Condition)):
+            if Condition[i] == strategy:
+                times.append(totalTime[i])
+                devs.append(maxDeviation[i])
+
+        ## individual trials: grey
+        plt.scatter(times, devs, color="grey", marker=markers[strategy], s=15)
+        ## mean of this strategy: bigger, in colour, with standard deviation as error bars
+        plt.errorbar(numpy.mean(times), numpy.mean(devs),
+                     xerr=numpy.std(times), yerr=numpy.std(devs),
+                     color=colors[strategy], marker=markers[strategy], markersize=10,
+                     capsize=4, label=strategy)
+
+    plt.xlabel("Total trial time (ms)")
+    plt.ylabel("Max lateral deviation (m)")
+    plt.legend()
+    plt.show()
+
+
+## Change the strategy here: "word" or "sentence".
+if __name__ == "__main__":
+    #trialTime, locPos, locColor = runTrial(interleaving="drivingOnly")
+    #plotTrial(trialTime, locPos, locColor)
+    runSimulations()
+
 
 
