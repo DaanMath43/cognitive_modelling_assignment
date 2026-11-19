@@ -259,6 +259,23 @@ def runTrial(nrWordsPerSentence=5, nrSentences=3, nrSteeringMovementsWhenSteerin
                 pos, steerTime = steer(pos, nrSteeringMovementsWhenSteering, locPos, locColor)
                 trialTime += steerTime
 
+    ## Strategy "drivingOnly" no typing, only steering for as long as typing WOULD have taken
+    elif interleaving == "drivingOnly":
+        # time the e-mail would have taken is (sentence retrieval + all words) per sentence, x number of sentences
+        emailTime = (retrievalTimeSentence + nrWordsPerSentence * timePerWord) * nrSentences
+
+        # steer() wants a NUMBER of 250 ms movements, not a time -> convert and round down to a whole number
+        nrMovements = math.floor(emailTime / steeringUpdateTime)
+
+        pos, steerTime = steer(pos, nrMovements, locPos, locColor)
+        trialTime += steerTime
+
+    elif interleaving == "none":
+        emailTime = (retrievalTimeSentence + nrWordsPerSentence * timePerWord) * nrSentences
+
+        pos = drift(pos, sentenceTime, locPos, locColor)  ## car drifts during the whole sentence
+        trialTime += emailTime
+
     return trialTime, locPos, locColor
 
 
@@ -287,3 +304,5 @@ if __name__ == "__main__":
 ### function to run multiple simulations. Needs to be defined by students (section 3 of assignment)
 def runSimulations(nrSims = 100):
     print("hello world")
+
+
