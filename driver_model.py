@@ -106,9 +106,6 @@ def resetParameters():
     wordsPerMinuteMean = 39.33
     wordsPerMinuteSD = 10.3
 
-	
-
-
 
 ##calculates if the car is not accelerating (m/s) more than it should (maxLateralVelocity) or less than it should (minLateralVelocity)  (done for a vector of numbers)
 def velocityCheckForVectors(velocityVectors):
@@ -134,9 +131,6 @@ def velocityCheckForVectors(velocityVectors):
     return velocityVectorsLoc  ### in m/s
 	
 
-
-
-
 ## Function to determine lateral velocity (controlled with steering wheel) based on where car is currently positioned. See Janssen & Brumby (2010) for more detailed explanation.
 ## Lateral velocity update depends on current position in lane. Intuition behind function: the further away you are, the stronger the correction will be that a human makes
 def vehicleUpdateActiveSteering(LD):
@@ -146,15 +140,11 @@ def vehicleUpdateActiveSteering(LD):
 	return returnValue ### in m/s
 	
 
-
-
 ### function to update lateral deviation in cases where the driver is NOT steering actively (when they are distracted by typing for example). Draw a value from a random distribution. This can be added to the position where the car is already.
 def vehicleUpdateNotSteering():
     
     global gaussDeviateMean
     global gaussDeviateSD 
-
-    
 
     vals = numpy.random.normal(loc=gaussDeviateMean, scale=gaussDeviateSD,size=1)[0]
     returnValue = velocityCheckForVectors(vals)
@@ -277,6 +267,23 @@ def runTrial(nrWordsPerSentence=5, nrSentences=3, nrSteeringMovementsWhenSteerin
 
         pos = drift(pos, emailTime, locPos, locColor)  ## car drifts during the whole sentence
         trialTime += emailTime
+    
+    elif interleaving == "after_random_words":
+        chunk_sizes = [2,3,4]
+
+        for s in range(nrSentences):
+            i = 0
+            while i < nrWordsPerSentence:
+                chunk_chosen = random.choice(chunk_sizes)
+                words_left = nrWordsPerSentence - i
+                if words_left < chunk_chosen:
+                    chunk_chosen = words_left
+                wordTime = (timePerWord + retrievalTimeWord) * chunk_chosen
+                if i == 0:
+                    wordTime += retrievalTimeSentence
+                trialTime += wordTime
+                pos = drift(pos, wordTime, locPos, locColor)
+
 
     meanPos = numpy.mean(numpy.abs(locPos))   ## average distance from lane centre (absolute, so left/right don't cancel)
     maxPos = numpy.max(numpy.abs(locPos))     ## furthest from lane centre, regardless of side
@@ -317,8 +324,8 @@ def runSimulations(nrSims = 100):
             maxDeviation.append(maxPos)
             Condition.append(strategies)
 
-    ## Plot: max deviation (y) against total trial time (x)
-    ## one symbol per strategy; individual trials in grey, the mean per strategy in colour with SD error bars
+    ## The plot with max deviation (y) against total trial time (x)
+    ## every symbl represents a strategy, individual trials in grey, the mean per strategy in colour with SD error bars
     markers = {"none": "o", "drivingOnly": "^", "sentence": "s", "word": "x"}
     colors = {"none": "red", "drivingOnly": "blue", "sentence": "green", "word": "black"}
 
@@ -331,9 +338,9 @@ def runSimulations(nrSims = 100):
                 times.append(totalTime[i])
                 devs.append(maxDeviation[i])
 
-        ## individual trials: grey
+        ## individual trials are grey
         plt.scatter(times, devs, color="grey", marker=markers[strategy], s=15)
-        ## mean of this strategy: bigger, in colour, with standard deviation as error bars
+        ## The mean of this strategy bigger, in colour, with standard deviation as error bars
         plt.errorbar(numpy.mean(times), numpy.mean(devs),
                      xerr=numpy.std(times), yerr=numpy.std(devs),
                      color=colors[strategy], marker=markers[strategy], markersize=10,
@@ -345,7 +352,12 @@ def runSimulations(nrSims = 100):
     plt.show()
 
 
-## Change the strategy here: "word" or "sentence".
+###
+### Section 4: A model that interleaves after every couple of words 
+###
+
+
+## Change the strategy here "word" or "sentence".
 if __name__ == "__main__":
     #trialTime, locPos, locColor = runTrial(interleaving="drivingOnly")
     #plotTrial(trialTime, locPos, locColor)
