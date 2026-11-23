@@ -278,11 +278,21 @@ def runTrial(nrWordsPerSentence=5, nrSentences=3, nrSteeringMovementsWhenSteerin
                 words_left = nrWordsPerSentence - i
                 if words_left < chunk_chosen:
                     chunk_chosen = words_left
-                wordTime = (timePerWord + retrievalTimeWord) * chunk_chosen
-                if i == 0:
+                ## typing the chunk: every word costs timePerWord, but the word retrieval ("where was I?")
+                ## is a switch cost, so it is paid once per chunk (after returning from the road), not per word
+                wordTime = timePerWord * chunk_chosen + retrievalTimeWord
+                if i == 0:                                    ## first chunk of a sentence: also retrieve the sentence
                     wordTime += retrievalTimeSentence
                 trialTime += wordTime
                 pos = drift(pos, wordTime, locPos, locColor)
+
+                i += chunk_chosen                             ## move on, otherwise the while-loop never ends
+
+                ## steer after every chunk, except after the very last chunk of the e-mail
+                lastChunk = (s == nrSentences - 1) and (i >= nrWordsPerSentence)
+                if not lastChunk:
+                    pos, steerTime = steer(pos, nrSteeringMovementsWhenSteering, locPos, locColor)
+                    trialTime += steerTime
 
 
     meanPos = numpy.mean(numpy.abs(locPos))   ## average distance from lane centre (absolute, so left/right don't cancel)
@@ -314,7 +324,7 @@ def runSimulations(nrSims = 100):
     Condition = []
     amountOfWords=[15,16,17,18,19,20]
 
-    for strategies in ["none","drivingOnly","sentence","word"]:
+    for strategies in ["none","drivingOnly","sentence","word","after_random_words"]:
         print(strategies)
         for round in range(nrSims):
             wordsInSentence= (random.choice(amountOfWords))
@@ -326,8 +336,8 @@ def runSimulations(nrSims = 100):
 
     ## The plot with max deviation (y) against total trial time (x)
     ## every symbl represents a strategy, individual trials in grey, the mean per strategy in colour with SD error bars
-    markers = {"none": "o", "drivingOnly": "^", "sentence": "s", "word": "x"}
-    colors = {"none": "red", "drivingOnly": "blue", "sentence": "green", "word": "black"}
+    markers = {"none": "o", "drivingOnly": "^", "sentence": "s", "word": "x", "after_random_words": "D"}
+    colors = {"none": "red", "drivingOnly": "blue", "sentence": "green", "word": "black", "after_random_words": "purple"}
 
     for strategy in markers:
         ## collect the trials that belong to this strategy
@@ -352,9 +362,7 @@ def runSimulations(nrSims = 100):
     plt.show()
 
 
-###
-### Section 4: A model that interleaves after every couple of words 
-###
+## Section 4 (bonus A): implemented as interleaving="after_random_words" inside runTrial()
 
 
 ## Change the strategy here "word" or "sentence".
