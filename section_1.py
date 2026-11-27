@@ -83,7 +83,7 @@ def example3(completeness="extremes"):
 
 def example4(completeness="extremes"):
     speeds = ["fast", "middle", "slow"]
-    secondStimulusTime = [40, 80, 110, 1150, 210, 240]
+    secondStimulusTime = [40, 80, 110, 150, 210, 240]
     totalTime = []
 
     if completeness == "extremes":
@@ -92,14 +92,14 @@ def example4(completeness="extremes"):
         combos = product(speeds, repeat=3)
 
     for p, c, m in combos:
-        total = (start()
-                 + perceptualstep(p)   # perceive stimulus 1
-                 + perceptualstep(p)   # perceive stimulus 2
-                 + cognitivestep(c)    # compare in working memory
-                 + cognitivestep(c)    # prepare motor command
-                 + motorstep(m))       # execute
         for secondTime in secondStimulusTime:
-            totalTime.append(total + secondTime)
+            total = (start()
+                     + max(perceptualstep(p), secondTime)   # stimulus 2 can only start when stimulus 1 is done and stimulus 2 is there
+                     + perceptualstep(p)                    # perceive stimulus 2
+                     + cognitivestep(c)                     # compare in working memory
+                     + cognitivestep(c)                     # prepare motor command
+                     + motorstep(m))                        # execute
+            totalTime.append(total)
 
     return totalTime  ### ms
 
@@ -140,4 +140,4 @@ def example5(completeness="extremes"):
 
     return results
 
-print(example5("all"))     
+print(example5("all"))
